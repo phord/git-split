@@ -1,0 +1,116 @@
+
+Introduction:
+
+git-split is a tool to divide git repositories into one or more
+new repositories, allowing complex file selection along the way.
+
+It was born of a need to divide a Subversion project which had been 
+converted to git. The project's history included many past sins, 
+like checking in large binaries and mixing code and non-code in 
+the same directory.
+
+I tried to use a combination of 'git ls-files' and customized
+gitignore files to piece the files out and run them through a
+clever git-filter-branch.  But this functionality seems to have
+been inadvertently lost in a past git feature implementation.
+
+Rather than fix it, I reimplemented gitignore file matching
+in a somewhat complex script collection.  The result is the
+git-split script in this project.  
+
+
+Details:
+
+Keep in mind that the file matching syntax matches files anywhere
+in the project's history.  If a directory moved at some point
+in time, for example, the files will have multiple names.  So, for
+example, if /source/include was moved from /inc-files in the past
+and I want to move the files and their history into a new repo,
+then I need to make sure to specify both paths.  
+   /source/include
+   /inc-files
+
+The -D (dry-run) switch can help you find files you missed.  
+
+
+To-do:
+
+Adapt the git-split command to work as a "git split" command.
+
+Consider automatic file rename detection.
+
+I think the repository naming syntax is stupid.  I'll try to fix it soon.
+
+Multiple splits on large repositories take much longer than single
+splits.  Ideally this could be managed by filtering into different
+branches in a single pass. But for now, it takes one pass for each
+new repository.
+
+Might need a way to filter just specific branches or commits.  So far, not a 
+concern for me.  But others probably want this.
+
+The split file format needs some documentation.
+
+The sed scripts need more documentation and/or splitting off.
+
+Split-file syntax:
+
+Wildcards can be used to match files in the repository's history.
+ *  - matches any text without a slash
+ ** - matches text including slashes (multiple path elements)
+ *.c  # matches any file ending in .c
+ 
+
+A trailing slash is used to denote a directory and all of its contents.
+   Wildcards ending with a slash match only directories and their contents.
+   Wildcards not ending with a slash match only files
+   foo*    # Matches all files named "foo*"
+   foo*/   # Matches all directories named "foo*"
+
+A leading slash is used to "fix" the expression to the root of the repository
+   /lib/   # Matches all files in the lib directory at the root of the project
+   lib/    # Matches all files in any directory named "lib" anywhere in the project
+   /*/     # Matches all directories in the root of the project (and their contents)
+   /*.c    # Matches all .c files in the root of the project
+   *.c     # Matches all .c files anywhere in the project
+   foo/*/*.c  # Matches foo/bar/baz.c, but does not match foo/baz.c or foo/bar/baz.h
+
+An exclamation negates ("unmatches") previously matched files.  It has no effect 
+on subsequent patterns, however.
+   *.c         # Match all *.c files in the project
+   *.h         # Match all *.h files in the project
+   !/include/  # Unmatch the files in /include/ 
+   *.tmp       # Match all *.tmp files, even the ones in /include/
+
+TBD: sed expressions ?
+ 
+An arrow defines the new repository to send the previously listed files.
+  --> foo           # Send the matched files to new repo named 'foo'
+  ----------> foo   # For easier reading, the arrow can be as long as you like
+
+  
+Split-file example:
+
+  # This is a comment
+  # Remove binaries from my repos
+  *.tgz
+  --> -dev-null
+
+  /imports/*.h   # .h files from the top-level imports directory
+  lib/           # lib directories anywhere in the project
+  lib*           # any file named lib* anywhere in the project
+  lib*/          # any directory named lib* anywhere in the project
+  foo/mylib/     # any 'mylib' directory directly under a 'foo' directory
+  bar/**/mylib   # any 'mylib' directory at any level under a 'bar' directory
+  /makefile      # the file named 'makefile' in the project root
+  !/libs/        # Exclude the directory named 'libs' in the project root
+  !*.d           # Exclude all .d files matched so far
+  bar/baz/       # Include all bar/baz directories, even the .d files
+
+  --> libs       # split this matched set of files off into a new repository named 'libs'
+
+  # Move all subdirectories under '/make'
+  make/*/
+  ------> platform
+
+
